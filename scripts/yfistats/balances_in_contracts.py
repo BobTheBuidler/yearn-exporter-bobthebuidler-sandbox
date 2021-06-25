@@ -5,7 +5,7 @@ import pyodbc
 from datetime import timedelta
 import os
 
-from ..sql.mssqlserver.utils import conn, cursor, getLastBlockOnDate
+from ...sql.mssqlserver.utils import conn, cursor, getLastBlockOnDate
 
 def CheckMakerDebtAtBlock(block_number):
     try:

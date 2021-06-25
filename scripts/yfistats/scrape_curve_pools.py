@@ -6,7 +6,7 @@ from web3 import Web3
 from pprint import pprint
 
 def main():
-    from ..sql.mssqlserver.utils import conn, cursor
+    from ...sql.mssqlserver.utils import conn, cursor
     
     provider = Contract("0x0000000022D53366457F9d5E68Ec105046FC4383")
     registry = Contract(provider.get_registry())

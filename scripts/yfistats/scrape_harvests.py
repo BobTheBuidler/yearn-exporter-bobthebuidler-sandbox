@@ -41,7 +41,7 @@ def nonVerifiedContracts():
     return nvc
 
 def main():
-    from ..sql.mssqlserver.utils import (conn, cursor, execStoredProcNoInput)
+    from ...sql.mssqlserver.utils import (conn, cursor, execStoredProcNoInput)
 
     def sqlGetHarvestEventList():
         querylist = cursor.execute("""

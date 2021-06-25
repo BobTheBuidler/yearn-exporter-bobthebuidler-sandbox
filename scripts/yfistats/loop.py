@@ -6,9 +6,9 @@ loop_interval_minutes = 60
 
 neverending = 1
 while neverending == 1:
-    run('export_strategies_to_sql')
-    run('scrape_harvests')
-    run('scrape_curve_pools')
-    run('balances_in_contracts')
+    run('yfistats/export_strategies_to_sql')
+    run('yfistats/scrape_harvests')
+    run('yfistats/scrape_curve_pools')
+    run('yfistats/balances_in_contracts')
     for second in tqdm(range(1,loop_interval_minutes * 60)):
         time.sleep(1)
