@@ -1,0 +1,29 @@
+version: '3.7'
+
+volumes:
+    solidity_compilers: {}
+    vyper_compilers: {}
+    brownie: {}
+    cache: {}
+
+networks:
+  yearn-exporter-ipfs:
+
+services:
+  yearn-exporter-ipfs:
+    build: .
+    command: ipfs
+    environment:
+      - WEB3_PROVIDER
+      - ETHERSCAN_TOKEN
+      - IPFS_NODE_ADDRESS
+      - IPFS_NODE_KEY
+      - IPFS_NODE_SECRET
+    volumes:
+      - solidity_compilers:/root/.solcx
+      - vyper_compilers:/root/.vvm
+      - brownie:/root/.brownie
+      - cache:/app/yearn-exporter/cache
+    restart: always
+    networks:
+      - yearn-exporter-ipfs
