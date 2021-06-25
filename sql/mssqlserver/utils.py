@@ -3,11 +3,10 @@ import os
 from brownie import convert, Contract
 
 dbconnstring = os.environ['DB_CONN_STRING']
-conn = pyodbc.connect(dbconnstring)
-cursor = conn.cursor()
 
-def dbConnSetup():
-    return conn, cursor
+conn = pyodbc.connect(dbconnstring)
+
+cursor = conn.cursor()
 
 ### Get data from other data ###
 ###     Using 'token_symbol' ###
