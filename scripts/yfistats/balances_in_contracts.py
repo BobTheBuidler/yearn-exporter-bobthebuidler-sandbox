@@ -38,16 +38,11 @@ def CheckMakerDebtAtDate(date_string):
     return debt 
 
 def CheckMakerYFICollatAtBlock(block_number):
-    try:
-        proxy_registry = Contract('0x4678f0a6958e4D2Bc4F1BAF7Bc52E8F3564f3fE4')
-        cdp_manager = Contract('0x5ef30b9986345249bc32d8928B7ee64DE9435E39')
-        ychad = Contract('ychad.eth')
-        vat = Contract('0x35D1b3F3D7966A1DFe207aa4514C12a259A0492B')
-    except:
-        proxy_registry = Contract.from_explorer('0x4678f0a6958e4D2Bc4F1BAF7Bc52E8F3564f3fE4')
-        cdp_manager = Contract.from_explorer('0x5ef30b9986345249bc32d8928B7ee64DE9435E39')
-        ychad = Contract.from_explorer('ychad.eth')
-        vat = Contract.from_explorer('0x35D1b3F3D7966A1DFe207aa4514C12a259A0492B')
+    proxy_registry = Contract('0x4678f0a6958e4D2Bc4F1BAF7Bc52E8F3564f3fE4')
+    cdp_manager = Contract('0x5ef30b9986345249bc32d8928B7ee64DE9435E39')
+    ychad = Contract('ychad.eth')
+    vat = Contract('0x35D1b3F3D7966A1DFe207aa4514C12a259A0492B')
+        
     proxy = proxy_registry.proxies(ychad)
     cdp = cdp_manager.first(proxy)
     urn = cdp_manager.urns(cdp)
@@ -120,6 +115,16 @@ def CheckKp3rEscrowBalanceAtDate(date_string):
     bal = CheckKp3rEscrowBalanceAtBlock(block)
     return bal
 
+def CheckMasterChefKp3rBalanceAtBlock(block_number):
+    masterchef = Contract('0xc2edad668740f1aa35e4d8f227fb8e17dca888cd')
+    poolId = 58
+    yearnKp3rWallet = '0x5f0845101857d2a91627478e302357860b1598a1'
+    balanceStaked, rewardDebt = masterchef.userInfo(poolId, yearnKp3rWallet, block_identifier = block_number)
+    accSushiPerShare = masterchef.poolInfo(poolId, block_identifier = block_number)[3] / 10 ** 12
+    sushiOwed = balanceStaked * accSushiPerShare - rewardDebt
+    
+    print(f"Block: {block_number} Balance Staked: {balanceStaked} Sushi Owed: {sushiOwed}")
+    return balanceStaked, sushiOwed
 # NOTE: Block lists
 
 def GetMakerBlockList():
@@ -282,6 +287,30 @@ def GetKp3RBlockList3():
     blockList = query.fetchall()
     return blockList
 
+def GetKp3RBlockListMasterChef():
+    query = cursor.execute("""
+        SELECT a.*
+        FROM
+        (
+            SELECT date,
+                MAX(blockHeight) maxBlockHeight
+            FROM eth.blockMetrics
+            WHERE date >= '2021-04-24'
+            GROUP BY date
+        ) AS a
+        LEFT JOIN
+        (
+            SELECT * 
+            FROM yfi.balancesInContracts
+            WHERE token_dbid = 22123
+             and depositor_address_dbid = 29648049
+             and foreign_contract_dbid = 1242887
+        ) AS b ON a.maxBlockHeight = b.blockHeight
+        where b.blockHeight is null
+        """)
+    blockList = query.fetchall()
+    return blockList
+
 def GetMakerCollateralBlockList(collateral_token_address):
     pass
 
@@ -374,7 +403,22 @@ def main():
             VALUES (""" + str(block) + """,22123,209352935856684835314,1757965,29648049)
                 """)
         conn.commit()
+
+    print("MasterChef SLP(KP3R/ETH)")
+    for datapoint in GetKp3RBlockListMasterChef():
+        datetime, block = datapoint
+        balanceStaked, sushiOwed = CheckMasterChefKp3rBalanceAtBlock(block)
+
+        cursor.execute(f"""
+            insert into yfi.balancesInContracts (blockHeight, token_dbid, balance, foreign_contract_dbid, depositor_address_dbid)
+            /* SLP Staked */
+            VALUES ({str(block)},22123,{balanceStaked},1242887,29648049)
+            /* SUSHI owed */
+                  ,({str(block)},20386,{sushiOwed},1242887,29648049)
+        """)
+        conn.commit()
     
+
 
 
 

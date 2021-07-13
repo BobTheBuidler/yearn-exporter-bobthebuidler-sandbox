@@ -1,8 +1,4 @@
-from brownie import chain, network, Contract
-
-import pyodbc
-import os
-from web3 import Web3
+from brownie import Contract
 from pprint import pprint
 
 def main():
