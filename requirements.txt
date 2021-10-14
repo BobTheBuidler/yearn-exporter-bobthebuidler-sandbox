@@ -16,3 +16,4 @@ semantic-version>=2.8.5
 boto3==1.17.88
 ### ### ### ### ###
 pyodbc>=4.0.30
+sqlalchemy

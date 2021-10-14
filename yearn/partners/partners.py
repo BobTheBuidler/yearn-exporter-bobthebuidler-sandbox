@@ -97,7 +97,10 @@ partners = [
                 wrapper='0x4e8a7c429192bfda8c9a1ef0f3b749d0f66657aa',
             )
         ],
-    ),
+    )
+]
+
+''',
     Partner(
         name='basketdao',
         treasury='0x7301C46be73bB04847576b6Af107172bF5e8388e',
@@ -113,5 +116,4 @@ partners = [
                 wrapper='0x0309c98B1bffA350bcb3F9fB9780970CA32a5060',
             ),
         ],
-    ),
-]
+    ),'''
