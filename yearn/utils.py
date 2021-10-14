@@ -61,10 +61,10 @@ def contract_creation_block(address) -> int:
     """
     logger.info("contract creation block %s", address)
     client = get_ethereum_client()
-    if client in ['tg', 'erigon']:
-        return _contract_creation_block_binary_search(address)
-    else:
-        return _contract_creation_block_bigquery(address)
+    #if client in ['tg', 'erigon']:
+    return _contract_creation_block_binary_search(address)
+    #else:
+    #    return _contract_creation_block_bigquery(address)
 
 
 def _contract_creation_block_binary_search(address):

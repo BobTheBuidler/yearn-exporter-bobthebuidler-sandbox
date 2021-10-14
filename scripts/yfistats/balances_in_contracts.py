@@ -135,7 +135,7 @@ def GetMakerBlockList():
             SELECT date,
                 MAX(blockHeight) maxBlockHeight
             FROM eth.blockMetrics
-            WHERE date >= '2021-02-09' and date < cast(getdate() as date)
+            WHERE date >= '2021-02-09' and date < (select max(date) from eth.blockMetrics)
             GROUP BY date
         ) AS a
         LEFT JOIN
@@ -157,7 +157,7 @@ def GetMakerYFICollatBlockList():
             SELECT date,
                 MAX(blockHeight) maxBlockHeight
             FROM eth.blockMetrics
-            WHERE date >= '2021-02-09' and date < cast(getdate() as date)
+            WHERE date >= '2021-02-09' and date < (select max(date) from eth.blockMetrics)
             GROUP BY date
         ) AS a
         LEFT JOIN
@@ -179,7 +179,7 @@ def GetUnitBlockList():
             SELECT date,
                 MAX(blockHeight) maxBlockHeight
             FROM eth.blockMetrics
-            WHERE date >= '2021-03-05' and date < cast(getdate() as date)
+            WHERE date >= '2021-03-05' and date < (select max(date) from eth.blockMetrics)
             GROUP BY date
         ) AS a
         LEFT JOIN
@@ -201,7 +201,7 @@ def GetUnitYFICollatBlockList():
             SELECT date,
                 MAX(blockHeight) maxBlockHeight
             FROM eth.blockMetrics
-            WHERE date >= '2021-03-05' and date < cast(getdate() as date)
+            WHERE date >= '2021-03-05' and date < (select max(date) from eth.blockMetrics)
             GROUP BY date
         ) AS a
         LEFT JOIN
@@ -223,7 +223,7 @@ def GetKp3RBlockList():
             SELECT date,
                 MAX(blockHeight) maxBlockHeight
             FROM eth.blockMetrics
-            WHERE date >= '2021-03-25' and date < cast(getdate() as date)
+            WHERE date >= '2021-03-25' and date < (select max(date) from eth.blockMetrics)
             GROUP BY date
         ) AS a
         LEFT JOIN

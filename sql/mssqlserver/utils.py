@@ -1,12 +1,18 @@
 import pyodbc
 import os
 from brownie import convert, Contract
+from sqlalchemy.engine import create_engine
 
 dbconnstring = os.environ['DB_CONN_STRING']
 
 conn = pyodbc.connect(dbconnstring)
 
 cursor = conn.cursor()
+
+def sqla():
+        return pyodbc.connect(os.environ['DB_CONN_STRING'])
+
+sqla_engine = create_engine('mssql://',creator=sqla, fast_executemany=False)
 
 ### Get data from other data ###
 ###     Using 'token_symbol' ###
@@ -58,18 +64,16 @@ def sqlGetAddressFromAddressDbid(address_dbid):
 ### Initialize contract from data ###
 
 def initializeContractFromSymbol(token_symbol):
-    data = sqlGetTokenAddressAndABIFromSymbol(token_symbol)
-    address = convert.to_address(data[0][0])
-    abi = data[0][1]
-    contract = Contract(address)
-    return contract
+        data = sqlGetTokenAddressAndABIFromSymbol(token_symbol)
+        address = convert.to_address(data[0][0])
+        abi = data[0][1]
+        return Contract(address)
 
 def initializeReserveTokenContractFromVaultTokenSymbol(token_symbol):
-    data = sqlGetReserveTokenAddressAndABIFromVaultTokenSymbol(token_symbol)
-    address = convert.to_address(data[0][0])
-    abi = data[0][1]
-    contract = Contract(address)
-    return contract
+        data = sqlGetReserveTokenAddressAndABIFromVaultTokenSymbol(token_symbol)
+        address = convert.to_address(data[0][0])
+        abi = data[0][1]
+        return Contract(address)
 
 def getLastBlockOnDate(date_string):
     query = cursor.execute("""

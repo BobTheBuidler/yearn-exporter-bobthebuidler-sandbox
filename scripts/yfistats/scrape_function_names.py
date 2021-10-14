@@ -2,6 +2,7 @@ from tqdm import tqdm
 from ...sql.mssqlserver.utils import (conn, cursor, execStoredProcNoInput)
 import time
 from brownie import Contract, chain
+from joblib import Parallel, delayed
 
 def nonVerifiedContracts():
     nvc = []
@@ -61,18 +62,17 @@ def GetFunctionName(_txHash):
             conn.commit()
         except:
             pass
-    elif functionName == None:
+    elif functionName is None:
         brownieDownloadContractObjects(brownieReceipt)
-    else:
-        pass
     return functionName
 
 def sqlUpdateFunctionName(_txHash):
+    print(_txHash)
     functionName = GetFunctionName(_txHash)
     if functionName == None:
         functionName = GetFunctionName(_txHash)
-        if functionName == None:
-            functionName = '@ NULL Fn Name @'
+    if functionName is None:
+        functionName = '@ NULL Fn Name @'
     if functionName == '':
         functionName = '@ Fallback Function @'
     cursor.execute("""
@@ -96,7 +96,5 @@ def main():
         where function_name_dbid is null and yearn = 1 and transactionHash not in ('0x1fa860268243e47fb0d1e85d1fd408807fbf43b1b68c721f1f8e98498736345e','0x990412f9d496ad561dc55d05695eade79e1a669acce8b9854cd7d464dc9272bc','0x40ddbb7f28128b2d9ec932ad81bf04dffe57e1e162dc744ad467eb61ec39ec01')
     """).fetchall()
 
-    for tx in tqdm(possibleWithdrawals):
-        hash = tx[0]
-        print(hash)
-        sqlUpdateFunctionName(hash)
+    
+    Parallel(1, 'threading')(delayed(sqlUpdateFunctionName)(tx[0]) for tx in tqdm(possibleWithdrawals))    

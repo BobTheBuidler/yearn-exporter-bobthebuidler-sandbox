@@ -10,7 +10,7 @@ import csv
 
 # NOTE: For reconciliation
 # NOTE: Value '0.01' here would mean reconciliations will pass if < 1% discrepancy
-THRESHOLD = 0.002
+THRESHOLD = 0.005
 
 def eventlessStrategies():
     def new(address):
@@ -119,7 +119,7 @@ def theseTxsWereTheSecondHarvestSameBlockForOlderVaultAPIs():
         '0xf81bd00b91670f93a39d86b45a4d604c32892192c8b0424aee70bcf7bb1cc426',
         '0xf50c1a414671fcc85cef79dc6fb255ea5b8002646c381212d857a4d47a403e21',
         '0x94957f26b6b50836883677a132aab32cf73c41d881e03300c6f575dc58d4f20f',
-        #'0xc4d8412d70bdf5b5eea4d3b0117662b1be60b8b2c1475c82c52af529c0d50383',
+        '0x702bcecd0bc6da6610f11c48c2861b696cf557e43577dd1b0bc2fd749e5c2336',
         '',
         '',
         '',
@@ -136,12 +136,15 @@ def main():
 
     def sqlGetHarvestEventList():
         results = cursor.execute("""
+
             SELECT * from yfi.[prepTxListForHarvestScraping]
             where strategy_address != '0x0000000000000000000000000000000000000000' 
-            --and transactionHash in ('0x53d4d438383c3d505414f4fd9198506d79da89e2324606f2add886c4c3073b29','0x1ded82b7d95b9a1cd7c1e7ef8b1bbc04a4590e818e13f50f3fcd20ea5e5381e3')
-            and vault_dbid < 113
-            --and vault_dbid not in (156, 112, 151, 146)
-            order by vault_dbid desc, transactionHash, strategy_abi, want_token_address desc 
+            /* Skip this, yvYFI miscalculated profits and Treasury reverted the fee */
+            and transactionHash not in ('0x0603adc7020c93dfa207b9cc00d4474fb6767ae2f0caf1aa7db64bf23cd67822') 
+            --and vault_dbid in (188,146) --, 201, 225, 229)
+            --and version = 'V2'
+            order by vault_dbid asc, transactionHash, strategy_abi, want_token_address desc 
+
             """).fetchall()
         vaults = {}
         return tqdm(results)
@@ -187,7 +190,7 @@ def main():
                 time.sleep(15)
         return brownieReceipt
 
-    def GetHarvestLogs(_txHash, badTxs, _vaultcontract):
+    def GetHarvestLogs(_txHash, badTxs):
         brownieReceipt = GetBrownieReceipt(_txHash)
         go = 0
         while go == 0:
@@ -196,12 +199,12 @@ def main():
                 events = brownieReceipt.events
                 logs = events['Harvested']
                 transfers = events['Transfer']
-                transfers = [transfer for transfer in transfers if transfer.address == _vaultcontract.address]
+                transfers = [transfer for transfer in transfers if transfer.address == _vaultaddress]
                 go = 1
             except AttributeError as e:
                 logging.critical(f"could not pull events for {_txHash}, {str(e)}")
                 logging.critical("why can't brownie pull events?")
-                csv.writer(badTxs).writerow((_txHash, _vaultcontract.address, None, None, None, f"could not pull events for {_txHash}, {str(e)}", None, None))
+                csv.writer(badTxs).writerow((_txHash, _vaultaddress, None, None, None, f"could not pull events for {_txHash}, {str(e)}", None, None))
                 logs = []
                 transfers = []
                 go = 1
@@ -210,6 +213,7 @@ def main():
                     print(_txHash + ' Harvested event did not fire.')
                     logging.info('this should only happen for v1')
                     logs = []
+                    transfers = []
                     go = 1
                 else:
                     print(_txHash)
@@ -271,9 +275,10 @@ def main():
     _logct = 0
     _vault = 0
     _logs = None
-    _vaultcontract = None
+    _contracts = {}
     _receipts = {}
     _vaulttokentransfers = None
+    _vaultaddress = None
 
     def process(HarvestEvent):
 
@@ -373,7 +378,7 @@ def main():
 
             def GetHarvestEventsV1(_txHash):
                 brownieReceipt = GetBrownieReceipt(_txHash)
-                logs, transfers = GetHarvestLogs(_txHash,badTxs, _vaultcontract)
+                logs, transfers = GetHarvestLogs(_txHash,badTxs)
                 if brownieReceipt.fn_name in ['withdraw','withdrawAll','withdrawETH','withdrawAllETH','ZapOut','migrateAll','earlyWithdrawal']:
                     cursor.execute("""
                     insert into yfi.ignoreNotHarvests
@@ -387,7 +392,7 @@ def main():
                 else:
                     logging.info(brownieReceipt.fn_name)
                     brownieDownloadContractObjects(brownieReceipt)
-                    logs = GetHarvestLogs(_txHash, badTxs, _vaultcontract)
+                    logs = GetHarvestLogs(_txHash, badTxs)
                         
                 return logs
 
@@ -399,13 +404,23 @@ def main():
                 conn.commit()
 
             logging.info(version)
-            strategycontract = Contract(strategy_address)
+            try:
+                strategycontract = _contracts[strategy_address]
+            except:
+                _contracts[strategy_address] = Contract(convert.to_address(strategy_address))
+                strategycontract = _contracts[strategy_address]
             logging.info("Strategy: " + strategy_address)
             
             harvestLogs = GetHarvestEventsV1(txHash)
             logging.info(harvestLogs)
             if len(harvestLogs) > 0: # First, try to get harvest event(s)
+                if len(harvestLogs) > 1:
+                    if harvestLogs[1] == []: # For some reason, occasionally when we filter logs for harvest events, it will return one list containing the events and one empty list. We just want the events. 
+                        harvestLogs = harvestLogs[0]
                 for log in harvestLogs:
+                #for log in harvestLogs[0]:
+                    print(log)
+                    print(log.address)
                     print('log address: ' + log.address)
                     if log.address == strategy_address:
                         wantEarned = log['wantEarned']
@@ -483,7 +498,7 @@ def main():
                 print("What's going on here?")
                 performanceFee = None
 
-        def processV2():
+        def processV2(tryAgain=False):
             
             def special_handling():
                 if txHash == '0xec36298301fd794370e41baf1d47798c01e59048d4e044efdb1948edce0335a3': #We aren't able to calculate because we need totalDebt mid-block
@@ -502,6 +517,8 @@ def main():
                     mgmtFeeChanged = []
                 if len(mgmtFeeChanged) == 1:
                     logging.info('mgmtfee changed')
+                    if mgmtFeeChanged[0].pos < log.pos:
+                        return mgmtFeeChanged[0]['managementFee']
                     return vaultcontract.managementFee(block_identifier=block_number-1)
                 elif len(mgmtFeeChanged) > 1:
                     logging.info('mgmtfee changed, and changed back?')
@@ -562,7 +579,7 @@ def main():
                 else:
                     logging.info(brownieReceipt.fn_name)
                     brownieDownloadContractObjects(brownieReceipt)
-                logs, transfers = GetHarvestLogs(_txHash, badTxs, _vaultcontract)
+                logs, transfers = GetHarvestLogs(_txHash, badTxs)
 
                 return logs, transfers
 
@@ -592,14 +609,12 @@ def main():
                 if apiversion in ['0.2.2','0.3.0']:
                     totalDebt = vaultcontract.totalAssets(block_identifier = block)
                 if apiversion in ['0.3.1','0.3.2','0.3.3','0.3.4']:
-                    #if isMigrationTo():
-                    #    totalDebt = 0
                     if isMigrationFrom():
                         logging.info('trying something here, this might break some stuff')
                         totalDebt = vaultcontract.totalDebt(block_identifier = block)
                     else:
                         totalDebt = vaultcontract.totalDebt(block_identifier = block)
-                if apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2']:
+                if apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2','0.4.3']:
                     totalDebt = vaultcontract.strategies(strategy_address, block_identifier = block)['totalDebt']
                     if totalDebt == 0:
                         logging.info('total debt is 0, checking next block...')
@@ -618,7 +633,7 @@ def main():
             def GetLastReport(vaultcontract, strategy_address, apiversion, block):
                 if apiversion in ['0.2.2','0.3.0','0.3.1','0.3.2','0.3.3','0.3.4']:
                     lastReport = vaultcontract.lastReport(block_identifier = block)
-                if apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2']:
+                if apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2','0.4.3']:
                     logging.info(vaultcontract)
                     lastReport = vaultcontract.strategies(strategy_address, block_identifier = block)['lastReport']
                     if lastReport == 0: # NOTE: This only happens during strategy migration
@@ -640,14 +655,16 @@ def main():
                     delegatedAssets = vaultcontract.delegatedAssets(block_identifier = block)
                     logging.info(f"delegated assets: {delegatedAssets}")
                     governance_fee = (totalDebt - delegatedAssets) * (timestamp - lastReport) * managementFeePercent / 10000 / 31556952
-                if apiversion in ['0.3.5','0.4.2']:
-                    #delegatedAssets = Contract(strategy_address).delegatedAssets(block_identifier = block)
+                if apiversion in ['0.3.5','0.4.2','0.4.3'] and tryAgain == True:
                     logging.info('trying something here, this might break other things')
-                    delegatedAssets = Contract(strategy_address).delegatedAssets(block_identifier = block_number)
+                    delegatedAssets = _contracts[strategy_address].delegatedAssets(block_identifier = block_number)
                     logging.info(f"delegated assets: {delegatedAssets}")
                     if delegatedAssets > totalDebt: #Sometimes must look before block, sometimes after
                         logging.info('untrying, looks like we broke things')
-                        delegatedAssets = Contract(strategy_address).delegatedAssets(block_identifier = block)
+                        delegatedAssets = _contracts[strategy_address].delegatedAssets(block_identifier = block)
+                    governance_fee = (totalDebt - delegatedAssets) * (timestamp - lastReport) * managementFeePercent / 10000 / 31556952
+                if apiversion in ['0.3.5','0.4.2','0.4.3'] and tryAgain == False:
+                    delegatedAssets = _contracts[strategy_address].delegatedAssets(block_identifier = block)
                     governance_fee = (totalDebt - delegatedAssets) * (timestamp - lastReport) * managementFeePercent / 10000 / 31556952
 
                 return governance_fee
@@ -698,27 +715,36 @@ def main():
                     print(f"calculatedFromHarvest {calculatedFromHarvest}   adjusted_from_transfers {adjusted_from_transfers}   ratio: {None}")
                     return None, adjusted_from_transfers
 
-            nonlocal _logs, _logct, _vaultcontract, _vaulttokentransfers, _receipts
+            nonlocal _logs, _logct, _contracts, _vaulttokentransfers, _receipts, _vaultaddress
             if _logs == None:
-                _vaultcontract = Contract(convert.to_address(HarvestEvent[13]))
+                try:
+                    _contracts[_vaultaddress]
+                except:
+                    _contracts[_vaultaddress] = Contract(_vaultaddress)
                 try:
                     _receipts[txHash]
                 except:
                     _receipts[txHash] = GetBrownieReceipt(txHash)
                 _logs, _vaulttokentransfers = GetHarvestEventsV2(txHash)
                 _logct = len(_logs)
+                
                 logging.info('vault_dbid: ' + str(vault_dbid))
                 logging.info(txHash)
                 logging.info(version)
                 logging.info(_logs)
             logs = _logs
-            vaultcontract = _vaultcontract
+            vaultcontract = _contracts[_vaultaddress]
             for log in logs:
                 if log.address == strategy_address:
                     logging.info(f"log.address: {log.address}    strategy_address: {strategy_address}")
                     apiversion = vaultcontract.apiVersion(block_identifier = block_number)
                     logging.info(f"api version: {apiversion}")
-                    if apiversion in ['0.2.2','0.3.0','0.3.1','0.3.2','0.3.3','0.3.4','0.3.5','0.4.2']:
+                    try:
+                        strategycontract = _contracts[strategy_address]
+                    except:
+                        _contracts[strategy_address] = Contract(convert.to_address(strategy_address))
+                        strategycontract = _contracts[strategy_address]
+                    if apiversion in ['0.2.2','0.3.0','0.3.1','0.3.2','0.3.3','0.3.4','0.3.5','0.4.2','0.4.3']:
                         sameTxHarvestsForSameVault = [log.pos[0] for log in logs if Contract(log.address).vault(block_identifier = block_number) == vaultcontract]
                         sameTxHarvestsForSameStrat = [log.pos[0] for log in logs if log.address == strategy_address]
                         logging.info(F"{sameTxHarvestsForSameVault}  {str((log.pos[0] == min(sameTxHarvestsForSameVault)))}")
@@ -749,36 +775,39 @@ def main():
                         gain = profit
                         
                         timestamp = chain[block_number].timestamp
-
                         
                         managementFeePercent = ManagementFeePercent()
                         performanceFeePercent = StrategistFeePercent()
                         strategistRewardPercent = performanceFeePercent
-                        if apiversion in ['0.2.0','0.2.1','0.2.2','0.3.0','0.3.1','0.3.2','0.3.3','0.3.4','0.3.5','0.4.0','0.4.1','0.4.2']: # NOTE: In newer vault versions, perf fee pct doesn't always = strategist fee pct
+                        if apiversion in ['0.2.0','0.2.1','0.2.2','0.3.0','0.3.1','0.3.2','0.3.3','0.3.4','0.3.5','0.4.0','0.4.1','0.4.2','0.4.3']: # NOTE: In newer vault versions, perf fee pct doesn't always = strategist fee pct
                             performanceFeePercent = PerformanceFeePercent()
                         
-                        strategycontract = Contract(strategy_address)
+                        
                         if gain == 0 and apiversion in ['0.4.0','0.4.1','0.4.2']:
                             logging.info('no gains, no pains')
                         
-                        if log.pos[0] == min(sameTxHarvestsForSameVault) or (log.pos[0] == min(sameTxHarvestsForSameStrat) and apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2']):
+                        if log.pos[0] == min(sameTxHarvestsForSameVault) or (log.pos[0] == min(sameTxHarvestsForSameStrat) and apiversion in ['0.3.5','0.4.0','0.4.1','0.4.2','0.4.3']):
                             lastReport = GetLastReport(vaultcontract, strategy_address, apiversion, block_number-1)
                             credit = None
                             if apiversion not in ['0.2.2','0.3.0','0.3.1']:
                                 credit = GetCredit()
                                 logging.info(f"credit: {credit} (not used anywhere)")
-                            if debtPayment == 0 and (credit == 0 or not credit) and loss == 0:
+                            
+                            if debtPayment == 0 and (credit == 0 or not credit) and loss == 0 and tryAgain:
+                                totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number-1)
+                            elif debtPayment == 0 and (credit == 0 or not credit) and loss == 0:
                                 totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number)
-                            elif debtPayment == 0 and loss != 0: #and credit == 0 
-                                logging.info('this prints')
+                            elif (debtPayment == 0 and loss != 0) and tryAgain:  
+                                totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number) 
+                            elif (debtPayment == 0 and loss != 0):  
                                 totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number-1) 
                                 logging.info(f"totalDebt end last block: {totalDebt}")
-                                #totalDebt -= loss
-                                #logging.info(f"totalDebt minus loss: {totalDebt}")
+                            elif tryAgain:
+                                totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number) + debtPayment
                             else:
                                 totalDebt = GetTotalDebt(vaultcontract, strategy_address, apiversion, block_number-1)
                             
-                            governance_fee = GetGovFee(block_number-1)
+                            governance_fee = GetGovFee(block_number-1) if tryAgain == False else GetGovFee(block_number)
                         else: #These will be close, but not fully accurate
                             logging.info("(else:) is running")
                             lastReport = GetLastReport(vaultcontract, strategy_address, apiversion, block_number)
@@ -830,13 +859,24 @@ def main():
                             if OtherHarvestLogPos == []:
                                 try:
                                     token_mint_pos = max([token_mint[0] for token_mint in token_mints])
-                                except ValueError:
+                                except ValueError as e:
+                                    logging.info(str(e))
                                     logging.info('no vault tokens minted for this harvest')
                                     token_mint_pos = None
-                            elif len(OtherHarvestLogPos) > 0:
+                            elif len(OtherHarvestLogPos) == 1:
                                 try:
                                     token_mint_pos = max([token_mint[0] for token_mint in token_mints if token_mint[0] > OtherHarvestLogPos[0]])
-                                except ValueError:
+                                except ValueError as e:
+                                    logging.info(str(e))
+                                    logging.info('no vault tokens minted for this harvest')
+                                    token_mint_pos = None
+                            elif len(OtherHarvestLogPos) > 1:
+                                try:
+                                    token_mint_pos = [token_mint[0] for token_mint in token_mints if token_mint[0] > max(OtherHarvestLogPos)]
+                                    print('aaa' + str(token_mint_pos))
+                                    token_mint_pos = max(token_mint_pos)
+                                except ValueError as e:
+                                    logging.info(str(e))
                                     logging.info('no vault tokens minted for this harvest')
                                     token_mint_pos = None
                             else:
@@ -860,10 +900,13 @@ def main():
                             return
                         '''
                         logging.info(f"token mint pos: {token_mint_pos}")
-                        if token_mint_pos or token_mint_pos == 0:
+                        if token_mint_pos:
                             print('this prints')
                             fee_transfers = [transfer for transfer in _vaulttokentransfers if transfer.pos[0] < log.pos[0] and transfer.pos[0] > token_mint_pos and transfer[0]['sender'] == vaultcontract.address]
+                        elif token_mint_pos == 0:
+                            fee_transfers = [transfer for transfer in _vaulttokentransfers if transfer.pos[0] < log.pos[0] and transfer.pos[0] > token_mint_pos and transfer[0]['sender'] == vaultcontract.address]
                         else:
+                            logging.info('this printing could indicate a potential issue')
                             fee_transfers = []
                         governance_transfer = GetValueFromTransferEvent([transfer for transfer in fee_transfers if transfer[0]['receiver'] == vaultcontract.rewards(block_identifier = block_number)])
                         strategist_transfer = GetValueFromTransferEvent([transfer for transfer in fee_transfers if transfer[0]['receiver'] == strategy_address])
@@ -877,9 +920,15 @@ def main():
                         ratio, adjusted_gov_xfer = Reconcile(governance_fee,governance_transfer)
                         logging.info(f"calced gov fee: {governance_fee}    adjusted transfer value: {adjusted_gov_xfer}    ratio: {ratio}")
                         if ratio == None or ratio < 1-THRESHOLD or ratio > 1+THRESHOLD:
-                            logging.critical('Gov Fees do not reconcile, must investigate')
-                            csv.writer(badTxs).writerow((txHash, vault_dbid, apiversion, ratio, loss, _receipts[txHash].fn_name, debtPayment, profit))
-                            return
+                            if tryAgain == False and ['0.3.5','0.4.2','0.4.3']:
+                                logging.critical('Gov Fees do not reconcile, but we have a plan...')
+                                logging.critical('Trying plan...')
+                                processV2(tryAgain=True)
+                                return
+                            else:
+                                logging.critical('Gov Fees do not reconcile, must investigate')
+                                csv.writer(badTxs).writerow((txHash, vault_dbid, apiversion, ratio, loss, _receipts[txHash].fn_name, debtPayment, profit))
+                                return
                         ratio, adjusted_strat_xfer = Reconcile(strategist_fee, strategist_transfer)
                         logging.info(f"calced strat fee: {strategist_fee}    adjusted transfer value: {adjusted_strat_xfer}    ratio: {ratio}")
                         if ratio == None or ratio < 1-THRESHOLD or ratio > 1+THRESHOLD:
@@ -924,8 +973,6 @@ def main():
                                 csv.writer(badTxs).writerow((txHash, vault_dbid, apiversion, ratio, loss, str(e)), debtPayment, profit)
                         conn.commit()
         
-        
-
         version = HarvestEvent[0]
         vault_dbid = HarvestEvent[1]
         vault_address_dbid = HarvestEvent[2]
@@ -941,14 +988,14 @@ def main():
         gov_recd_value = HarvestEvent[12]
         strategy_address = convert.to_address(HarvestEvent[14])
             
-        nonlocal _hash, _donect, _vault, _logct, _logs, _vaultcontract, _vaulttokentransfers, _receipts
+        nonlocal _hash, _donect, _vault, _logct, _logs, _contracts, _vaulttokentransfers, _receipts, _vaultaddress
         if _vault != vault_dbid or _hash != txHash:
             _vault = vault_dbid
             _hash = txHash
+            _vaultaddress = convert.to_address(HarvestEvent[13])
             _donect = -1
             _logct = 0 
             _logs, _vaulttokentransfers = None, None
-            _vaultcontract = None
 
         if version == "V1":
             processV1()
