@@ -12,6 +12,7 @@ node_modules/
 static/*
 !static/.gitkeep
 .env
+.worktrees
 secrets/*
 !secrets/.gitkeep
 .python-version
