@@ -17,3 +17,4 @@ secrets/*
 .python-version
 generated
 specialpurpose/bobskeys.py
+.worktrees
