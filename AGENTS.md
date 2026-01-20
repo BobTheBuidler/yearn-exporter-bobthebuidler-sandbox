@@ -7,10 +7,12 @@ All agents must follow these rules:
    - Common: `feat:`, `fix:`, `chore:`, `refactor:`, `docs:`, `test:`, `perf:`
    - Support titles: `fix(docs):`, `fix(benchmarks):`, `fix(cicd):`
 3) Commit messages must follow the same Conventional Commits-style prefixes and include a short functional description plus a user-facing value proposition.
-4) PR descriptions must include `Summary`, `Rationale`, and `Details` sections.
+4) PR descriptions must include Summary, Rationale, and Details sections.
 5) Run relevant Python tests for changes (pytest/unittest or the repo's configured runner).
 6) Follow formatting/linting configured in pyproject.toml, setup.cfg, tox.ini, or ruff.toml.
 7) Update dependency lockfiles when adding or removing Python dependencies.
-8) Keep base image tags pinned.
+8) Maximize the use of caching in GitHub workflow files to minimize run duration.
+9) Use one of `paths` or `paths-ignore` in every workflow file to make sure workflows only run when required.
+10) Keep base image tags pinned.
 
 Reference: https://www.conventionalcommits.org/en/v1.0.0/
