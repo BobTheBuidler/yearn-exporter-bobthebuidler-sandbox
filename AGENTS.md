@@ -11,8 +11,8 @@ All agents must follow these rules:
 5) Run relevant Python tests for changes (pytest/unittest or the repo's configured runner).
 6) Follow formatting/linting configured in pyproject.toml, setup.cfg, tox.ini, or ruff.toml.
 7) Update dependency lockfiles when adding or removing Python dependencies.
-8) Maximize the use of caching in GitHub workflow files to minimize run duration.
-9) Use one of `paths` or `paths-ignore` in every workflow file to make sure workflows only run when required.
-10) Keep base image tags pinned.
+8) Keep provisioning YAML and dashboard JSON in sync (add/remove entries together).
+9) Preserve dashboard uid values to avoid breaking links.
+10) Prefer exporting dashboards in a stable JSON format to minimize diffs.
 
 Reference: https://www.conventionalcommits.org/en/v1.0.0/
